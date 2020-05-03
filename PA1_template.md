@@ -404,7 +404,7 @@ head(activity, 10)
 ### 2. Make a panel plot containing a time series plot (i.e. 𝚝𝚢𝚙𝚎 = "𝚕") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis). See the README file in the GitHub repository to see an example of what this plot should look like using simulated data.
 
 
-```{, warning=FALSE}
+```r
 activity_dt_interval <- activity[, c(lapply(.SD, mean, na.rm = TRUE)), .SDcols = c("steps"), by = .(interval, day_type)]
 ggplot(activity, aes(x = interval , y = steps, color=day_type))+
     geom_line() +
@@ -416,3 +416,5 @@ ggplot(activity, aes(x = interval , y = steps, color=day_type))+
     labs(color = "Day Type") +
     facet_wrap(vars(day_type), ncol = 1, nrow = 2)
 ```
+
+![](PA1_template_files/figure-html/unnamed-chunk-14-1.png)<!-- -->
