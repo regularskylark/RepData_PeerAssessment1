@@ -7,19 +7,161 @@ output:
 
 
 ## Loading and preprocessing the data
+```{r, warning=FALSE, message = FALSE}
+library("data.table")
+library("ggplot2")
+library(scales)
+library(Hmisc)
+
+# comment these lines out if wd already local or not run from source()
+thisdir <- getSrcDirectory(function(x) {
+    x
+})
+setwd(thisdir)
 
 
+# load, unzip data into data directory if needed
+dir.create(file.path(".", "data"), showWarnings = FALSE)
+data_filename = "data/data.zip"
+if (!file.exists(data_filename)) {
+    data_url <-
+        "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+    download.file(data_url, destfile = data_filename)
+    unzip("data/data.zip", exdir = "./data")
+}
+data_dir <- "./data"
+
+activity <- fread(file.path(data_dir, "activity.csv"))
+summary(activity)
+```
 
 ## What is mean total number of steps taken per day?
 
+## Total Steps Per Day
+```{r}
+total_steps <- activity[, c(lapply(.SD, sum, na.rm=TRUE)), .SDcols = c("steps"), by = .(date)]
+total_steps
+
+```
+
+### Histogram of Steps Taken
+```{r}
+ggplot(total_steps, aes(x = steps)) +
+    geom_histogram(binwidth = 500) +
+    theme_bw() +
+    labs(title = "Total Steps Per Day", x = "Steps", y = "Frequency (Bin Width 500)")
+```
+
+### Median Steps Taken
+```{r}
+total_steps[, .(median_steps = median(steps, na.rm = TRUE))]
+```
+
+### Mean Steps Taken
+```{r}
+total_steps[, .(mean_steps = mean(steps, na.rm = TRUE))]
+```
 
 
 ## What is the average daily activity pattern?
 
+### 1. Make a time series plot
+```{r}
+time_24hrs <- function(t) {
+    t <- sprintf("%04d", t)
+    t <- sprintf("%s:%s", substr(t, 0, 2), substr(t, 2, 3))
+}
+avg_steps_5min <- aggregate(
+        x = list(mean_steps = activity$steps),
+        by = list(interval = activity$interval),
+        FUN = mean,
+        na.rm = TRUE
+    )
+list_24hr <-
+    sapply(activity$interval, function(time)
+        sprintf("%04d", time))
+list_24hr_ticks <- list_24hr[seq(1, length(list_24hr), 400)]
+list_24hr_breaks <-
+    activity$interval[seq(1, length(activity$interval), 400)]
 
+head(activity$interval, 10)
+head(list_24hr_ticks, 10)
+ggplot(data = avg_steps_5min, aes(x = interval, y = mean_steps)) +
+    geom_line() +
+    theme_bw() +
+    scale_x_continuous(labels = time_24hrs) +
+    xlab("Time") +
+    ylab("Average Steps Taken") 
+```
+
+### 2. Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+```{r}
+interval_max_steps <- which.max(avg_steps_5min$mean_steps)
+max_steps = time_24hrs(avg_steps_5min[interval_max_steps, 'interval'])
+max_steps
+```
 
 ## Imputing missing values
+### 1. Calculate and report the total number of missing values in the dataset.
+```{r}
+length(which(is.na(activity$steps)))
+```
 
+### 3. Create a new dataset that is equal to the original dataset but with the missing data filled in.
+```{r}
+activity_imputed <- activity
+activity_imputed$steps <- as.numeric(impute(activity_imputed$steps, fun=mean))
+head(activity, 10)
+head(activity_imputed, 10)
+```
 
+### 4. Make a histogram of the total number of steps taken each day.
+```{r}
+total_steps_imputed <- activity_imputed[, c(lapply(.SD, sum)), .SDcols = c("steps"), by = .(date)]
+total_steps_imputed
+ggplot(total_steps_imputed, aes(x = steps)) +
+    geom_histogram(binwidth = 500) +
+    theme_bw() +
+    labs(title = "Total Steps Per Day", x = "Steps", y = "Frequency (Bin Width 500)")
+```
+
+### 4.5 Calculate and report the mean and median total number of steps taken per day.
+
+### Median Steps Taken
+```{r}
+total_steps_imputed[, .(median_steps = median(steps))]
+```
+
+### Mean Steps Taken
+```{r}
+total_steps_imputed[, .(mean_steps = mean(steps))]
+```
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+### 1. Create a new factor variable in the dataset with two levels – “weekday” and “weekend” indicating whether a given date is a weekday or weekend day.
+
+```{r}
+activity[, day_type := as.POSIXct(date, format = "%Y-%m-%d")]
+activity[, day_type := weekdays(x=day_type)]
+activity[grepl(pattern = "Monday|Tuesday|Wednesday|Thursday|Friday", x=day_type), "day_type"] <- "Weekday"
+activity[grepl(pattern = "Saturday|Sunday", x=day_type), "day_type"] <- "Weekend"
+activity[, day_type := as.factor(day_type)]
+head(activity, 10)
+```
+
+### 2. Make a panel plot containing a time series plot (i.e. 𝚝𝚢𝚙𝚎 = "𝚕") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis). See the README file in the GitHub repository to see an example of what this plot should look like using simulated data.
+
+
+```{, warning=FALSE}
+activity_dt_interval <- activity[, c(lapply(.SD, mean, na.rm = TRUE)), .SDcols = c("steps"), by = .(interval, day_type)]
+ggplot(activity, aes(x = interval , y = steps, color=day_type))+
+    geom_line() +
+    theme_bw() +
+    theme(legend.position = "none") +
+    scale_x_continuous(labels = time_24hrs) +
+    xlab("Time") +
+    ylab("Average Steps Taken") +
+    labs(color = "Day Type") +
+    facet_wrap(vars(day_type), ncol = 1, nrow = 2)
+```
